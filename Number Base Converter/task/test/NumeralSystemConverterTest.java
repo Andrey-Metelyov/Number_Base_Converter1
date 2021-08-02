@@ -4,6 +4,7 @@ import org.hyperskill.hstest.testcase.TestCase;
 import org.hyperskill.hstest.testing.TestedProgram;
 
 import java.util.Arrays;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Random;
 
@@ -12,230 +13,511 @@ public class NumeralSystemConverterTest extends StageTest<String> {
     @Override
     public List<TestCase<String>> generate() {
 
-        return Arrays.asList(new TestCase<String>().setDynamicTesting(this::test1),
+        return Arrays.asList(
+            new TestCase<String>().setDynamicTesting(this::test1),
             new TestCase<String>().setDynamicTesting(this::test2),
             new TestCase<String>().setDynamicTesting(this::test3),
-            new TestCase<String>().setDynamicTesting(this::test4),
-            new TestCase<String>().setDynamicTesting(this::test5)
+            new TestCase<String>().setTimeLimit(60000).setDynamicTesting(this::test4),
+            new TestCase<String>().setTimeLimit(60000).setDynamicTesting(this::test5),
+            new TestCase<String>().setTimeLimit(60000).setDynamicTesting(this::test6),
+            new TestCase<String>().setTimeLimit(60000).setDynamicTesting(this::test7)
         );
     }
 
-    //test unexpected program termination
+    //test exit command
     CheckResult test1() {
+
         TestedProgram main = new TestedProgram();
         String output = main.start().toLowerCase();
-        String userResult;
-        String actualResult;
-        int randomDecimal;
 
-        if (!output.contains("decimal")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the decimal number to be " +
-                    "converted with the message \"Enter number in decimal system\"" +
-                    ".");
+        if (!output.contains("source base") || !output.contains("target base") || !output.contains("/exit")) {
+            return CheckResult.wrong("Your program should output the message \"Enter two numbers in format:" +
+                " {source base} {target base} (To quit type /exit)\" when it starts");
         }
 
-        randomDecimal = getRandomDecimal();
-        actualResult = convertDecimalToBaseX(randomDecimal, 16);
-
-        output = main.execute(String.valueOf(randomDecimal)).toLowerCase();
-        if (!output.contains("target base")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the target base " +
-                    "with the message \"Enter target base\".");
-        }
-
-        output = main.execute("16").toLowerCase();
-        if (!output.contains("result:")) {
-            return CheckResult
-                .wrong("Your program should print the result in the format " +
-                    "\"Conversion result: CONVERTED_NUMBER\", where CONVERTED_NUMBER is " +
-                    "the converted number.");
-        }
-
-        userResult = output.substring(output.indexOf(":") + 1).trim();
-        if (!userResult.equals(actualResult)) {
-            return CheckResult.wrong("The conversion result of your program is wrong");
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
         }
 
         return CheckResult.correct();
     }
 
-    //Test conversion to base 16
+    //test output format
     CheckResult test2() {
-
         TestedProgram main = new TestedProgram();
-        String output = main.start().toLowerCase();
-        String userResult;
+        String output;
+        String randomDecimal;
         String actualResult;
-        int randomDecimal;
+        String userResult;
+        String lastLine;
+        String[] lines;
 
-        if (!output.contains("decimal")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the decimal number to be " +
-                    "converted with the message \"Enter number in decimal system\"" +
-                    ".");
+        main.start();
+        output = main.execute("10 2").toLowerCase();
+        if (!output.contains("base 10") || !output.contains("convert to base 2")) {
+            return CheckResult.wrong("Your program should prompt the user for the number to be " +
+                "converted with the message \"Enter number in base " +
+                "{user source base} to convert to base {user target base}" +
+                " (To go back type /back)\" after accepting the " +
+                "source and target base");
         }
 
-        randomDecimal = getRandomDecimal();
-        actualResult = convertDecimalToBaseX(randomDecimal, 16);
-
-        output = main.execute(String.valueOf(randomDecimal)).toLowerCase();
-        if (!output.contains("target base")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the target base " +
-                    "with the message \"Enter target base\".");
+        if (!output.contains("/back")) {
+            return CheckResult.wrong("Your program should provide the user with an option to go " +
+                "back to the top-level menu with the message \"Enter number in base " +
+                "{user source base} to convert to base {user target base} " +
+                "(To go back type /back)\"");
         }
 
-        output = main.execute("16").toLowerCase();
-        if (!output.contains("result")) {
-            return CheckResult
-                .wrong("Your program should print the result in the format " +
-                    "\"Conversion result: CONVERTED_NUMBER\", where CONVERTED_NUMBER is " +
-                    "the converted number.");
+        randomDecimal = Generator.getRandomSourceNumber(10);
+        actualResult = Converter.convertDecimalToBaseX(randomDecimal, 2);
+
+        output = main.execute(randomDecimal).toLowerCase();
+        lines = output.split("\n");
+        lastLine = lines[lines.length - 1];
+
+        if (!lines[0].contains("result:")) {
+            return CheckResult.wrong("Your program should print the conversion result in the " +
+                "format \"Conversion result: CONVERTED_NUMBER\"");
         }
 
-        userResult = output.substring(output.indexOf(":") + 1).trim();
-        if (!userResult.equals(actualResult)) {
+        if (!lines[0].contains(":")) {
+            return CheckResult.wrong("After entering the target base the next line doesn't contain a conversion result!\n" +
+                "It should contain ':' symbol!\n" +
+                "Your line\n:" + lines[0]);
+        }
+
+        userResult = lines[0].substring(output.indexOf(":") + 1).trim();
+        if (!userResult.equalsIgnoreCase(actualResult)) {
             return CheckResult.wrong("The conversion result of your program is wrong");
         }
+
+        if (main.isFinished()) {
+            return CheckResult.wrong("Your program should not terminate until the user enter " +
+                "\"/exit\" in the top-level menu");
+        }
+
+        if (lastLine.contains("/exit")) {
+            return CheckResult.wrong("Your program should remember the user's source and target " +
+                "base and should not return to the top-level menu " +
+                "until the user enters \"/back\"");
+        }
+
+        if (!lastLine.contains("base 10") || !lastLine.contains("convert to base 2")) {
+            return CheckResult.wrong("After each conversion, your program should prompt the user" +
+                " for a number to be " +
+                "converted with the message \"Enter number in base " +
+                "{user source base} to convert to base {user target base}" +
+                " (To go back type /back)\" until the user enters " +
+                "\"/back\"");
+        }
+
 
         return CheckResult.correct();
     }
 
+    //test back command
     CheckResult test3() {
-
         TestedProgram main = new TestedProgram();
-        String output = main.start().toLowerCase();
-        String userResult;
-        String actualResult;
-        int randomDecimal;
+        String output;
+        String lastLine;
+        String[] lines;
 
-        if (!output.contains("decimal")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the decimal number to be " +
-                    "converted with the message \"Enter number in decimal system\"" +
-                    ".");
+
+        main.start();
+        main.execute("10 2");
+        main.execute(Generator.getRandomSourceNumber(10));
+
+        output = main.execute("/back").toLowerCase();
+        if (!output.contains("/exit")) {
+            return CheckResult.wrong("Your program should take the user back to the top-level " +
+                "menu when they enter \"/back\"");
         }
 
-        randomDecimal = getRandomDecimal();
-        actualResult = convertDecimalToBaseX(randomDecimal, 16);
+        main.execute("10 8");
+        output = main.execute(Generator.getRandomSourceNumber(10)).toLowerCase().trim();
 
-        output = main.execute(String.valueOf(randomDecimal)).toLowerCase();
-        if (!output.contains("target base")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the target base " +
-                    "with the message \"Enter target base\".");
+        lines = output.split("\n");
+        lastLine = lines[lines.length - 1];
+        if (!lastLine.contains("base 10") || !lastLine.contains("convert to base 8")) {
+            return CheckResult.wrong("After each conversion, your program should prompt the user" +
+                " for a number to be " +
+                "converted with the message \"Enter number in base " +
+                "{user source base} to convert to base {user target base}" +
+                " (To go back type /back)\" until the user enters " +
+                "\"/back\"");
         }
 
-        output = main.execute("16").toLowerCase();
-        if (!output.contains("result")) {
-            return CheckResult
-                .wrong("Your program should print the result in the format " +
-                    "\"Conversion result: CONVERTED_NUMBER\", where CONVERTED_NUMBER is " +
-                    "the converted number.");
-        }
-
-        userResult = output.substring(output.indexOf(":") + 1).trim();
-        if (!userResult.equals(actualResult)) {
-            return CheckResult.wrong("The conversion result of your program is wrong");
+        main.execute("/back");
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
         }
 
         return CheckResult.correct();
     }
 
-    //Test conversion to base 2
+    //convert every possible base to every possible base ;)
     CheckResult test4() {
-
         TestedProgram main = new TestedProgram();
-        String output = main.start().toLowerCase();
+        String output;
+        String lastLine;
         String userResult;
         String actualResult;
-        int randomDecimal;
+        String randomSourceNumber;
+        String[] lines;
 
-        if (!output.contains("decimal")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the decimal number to be " +
-                    "converted with the message \"Enter number in decimal system\"" +
-                    ".");
+        main.start();
+
+        for (int sourceBase = 2; sourceBase <= 18; sourceBase += 3) {
+
+            for (int targetBase = 2; targetBase <= 36; targetBase += 3) {
+
+                if (sourceBase == targetBase) {
+                    continue;
+                }
+
+                output = main.execute(sourceBase + " " + targetBase).toLowerCase();
+                if (!output.contains("base " + sourceBase) || !output.contains("convert to base " + targetBase)) {
+                    return CheckResult.wrong("Your program should prompt the user for the number to be " +
+                        "converted with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base}" +
+                        " (To go back type /back)\" after accepting the " +
+                        "source and target base");
+                }
+
+                if (!output.contains("/back")) {
+                    return CheckResult.wrong("Your program should provide the user with an option to go " +
+                        "back to the top-level menu with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base} " +
+                        "(To go back type /back)\"");
+                }
+
+                randomSourceNumber = Generator.getRandomSourceNumber(sourceBase);
+                actualResult = Converter
+                    .convertSourceToTargetBase(randomSourceNumber, sourceBase, targetBase);
+
+                output = main.execute(randomSourceNumber).toLowerCase();
+
+                lines = output.split("\n");
+                lastLine = lines[lines.length - 1];
+
+                if (!lines[0].contains(":")) {
+                    return CheckResult.wrong("After entering the target base the next line doesn't contain a conversion result!\n" +
+                        "It should contain ':' symbol!\n" +
+                        "Your line\n:" + lines[0]);
+                }
+
+                userResult = lines[0].substring(output.indexOf(":") + 1).trim();
+                if (!userResult.equalsIgnoreCase(actualResult)) {
+                    return CheckResult.wrong("The conversion result of your program is wrong");
+                }
+
+                if (main.isFinished()) {
+                    return CheckResult.wrong("Your program should not terminate until the user enter " +
+                        "\"/exit\" in the top-level menu");
+                }
+
+                if (lastLine.contains("/exit")) {
+                    return CheckResult.wrong("Your program should remember the user's source and target " +
+                        "base and should not return to the top-level menu " +
+                        "until the user enters \"/back\"");
+                }
+
+                main.execute("/back");
+            }
+
         }
 
-        randomDecimal = getRandomDecimal();
-        actualResult = convertDecimalToBaseX(randomDecimal, 2);
-
-        output = main.execute(String.valueOf(randomDecimal)).toLowerCase();
-        if (!output.contains("target base")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the target base " +
-                    "with the message \"Enter target base\".");
-        }
-
-        output = main.execute("2").toLowerCase();
-        if (!output.contains("result")) {
-            return CheckResult
-                .wrong("Your program should print the result in the format " +
-                    "\"Conversion result: CONVERTED_NUMBER\", where CONVERTED_NUMBER is " +
-                    "the converted number.");
-        }
-
-        userResult = output.substring(output.indexOf(":") + 1).trim();
-        if (!userResult.equals(actualResult)) {
-            return CheckResult.wrong("The conversion result of your program is wrong");
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
         }
 
         return CheckResult.correct();
     }
 
-    //Test conversion to base 8
     CheckResult test5() {
-
         TestedProgram main = new TestedProgram();
-        String output = main.start().toLowerCase();
+        String output;
+        String lastLine;
         String userResult;
         String actualResult;
-        int randomDecimal;
+        String randomSourceNumber;
+        String[] lines;
 
-        if (!output.contains("decimal")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the decimal number to be " +
-                    "converted with the message \"Enter number in decimal system\"" +
-                    ".");
+        main.start();
+
+        for (int sourceBase = 19; sourceBase <= 36; sourceBase += 3) {
+
+            for (int targetBase = 2; targetBase <= 36; targetBase += 3) {
+
+                if (sourceBase == targetBase) {
+                    continue;
+                }
+
+                output = main.execute(sourceBase + " " + targetBase).toLowerCase();
+                if (!output.contains("base " + sourceBase) || !output.contains("convert to base " + targetBase)) {
+                    return CheckResult.wrong("Your program should prompt the user for the number to be " +
+                        "converted with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base}" +
+                        " (To go back type /back)\" after accepting the " +
+                        "source and target base");
+                }
+
+                if (!output.contains("/back")) {
+                    return CheckResult.wrong("Your program should provide the user with an option to go " +
+                        "back to the top-level menu with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base} " +
+                        "(To go back type /back)\"");
+                }
+
+                randomSourceNumber = Generator.getRandomSourceNumber(sourceBase);
+                actualResult = Converter
+                    .convertSourceToTargetBase(randomSourceNumber, sourceBase, targetBase);
+
+                output = main.execute(randomSourceNumber).toLowerCase();
+
+                lines = output.split("\n");
+                lastLine = lines[lines.length - 1];
+
+                if (!lines[0].contains(":")) {
+                    return CheckResult.wrong("After entering the target base the next line doesn't contain a conversion result!\n" +
+                        "It should contain ':' symbol!\n" +
+                        "Your line\n:" + lines[0]);
+                }
+
+                userResult = lines[0].substring(output.indexOf(":") + 1).trim();
+                if (!userResult.equalsIgnoreCase(actualResult)) {
+                    return CheckResult.wrong("The conversion result of your program is wrong");
+                }
+
+                if (main.isFinished()) {
+                    return CheckResult.wrong("Your program should not terminate until the user enter " +
+                        "\"/exit\" in the top-level menu");
+                }
+
+                if (lastLine.contains("/exit")) {
+                    return CheckResult.wrong("Your program should remember the user's source and target " +
+                        "base and should not return to the top-level menu " +
+                        "until the user enters \"/back\"");
+                }
+
+                main.execute("/back");
+            }
+
         }
 
-        randomDecimal = getRandomDecimal();
-        actualResult = convertDecimalToBaseX(randomDecimal, 8);
-
-        output = main.execute(String.valueOf(randomDecimal)).toLowerCase();
-        if (!output.contains("target base")) {
-            return CheckResult
-                .wrong("Your program should prompt the user for the target base " +
-                    "with the message \"Enter target base\".");
-        }
-
-        output = main.execute("8").toLowerCase();
-        if (!output.contains("result:")) {
-            return CheckResult
-                .wrong("Your program should print the result in the format " +
-                    "\"Conversion result: CONVERTED_NUMBER\", where CONVERTED_NUMBER is " +
-                    "the converted number.");
-        }
-
-        userResult = output.substring(output.indexOf(":") + 1).trim();
-        if (!userResult.equals(actualResult)) {
-            return CheckResult.wrong("The conversion result of your program is wrong");
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
         }
 
         return CheckResult.correct();
     }
 
+    //using BigInteger
+    CheckResult test6() {
+        TestedProgram main = new TestedProgram();
+        String output;
+        String lastLine;
+        String userResult;
+        String actualResult;
+        String randomBigInteger;
+        String[] lines;
 
-    //Helper methods
-    String convertDecimalToBaseX(int num, int targetBase) {
-        return Integer.toString(num, targetBase);
+        main.start();
+
+        for (int sourceBase = 2; sourceBase <= 18; sourceBase += 3) {
+
+            for (int targetBase = 2; targetBase <= 36; targetBase +=3) {
+
+                if (sourceBase == targetBase) {
+                    continue;
+                }
+
+                output = main.execute(sourceBase + " " + targetBase).toLowerCase();
+                if (!output.contains("base " + sourceBase) || !output.contains("convert to base " + targetBase)) {
+                    return CheckResult.wrong("Your program should prompt the user for the number to be " +
+                        "converted with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base}" +
+                        " (To go back type /back)\" after accepting the " +
+                        "source and target base");
+                }
+
+                if (!output.contains("/back")) {
+                    return CheckResult.wrong("Your program should provide the user with an option to go " +
+                        "back to the top-level menu with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base} " +
+                        "(To go back type /back)\"");
+                }
+
+                randomBigInteger = Generator.getRandomBigInteger(sourceBase);
+                actualResult = Converter
+                    .convertSourceToTargetBase(randomBigInteger, sourceBase, targetBase);
+
+                output = main.execute(randomBigInteger).toLowerCase();
+
+                lines = output.split("\n");
+                lastLine = lines[lines.length - 1];
+
+                if (!lines[0].contains(":")) {
+                    return CheckResult.wrong("After entering the target base the next line doesn't contain a conversion result!\n" +
+                        "It should contain ':' symbol!\n" +
+                        "Your line\n:" + lines[0]);
+                }
+
+                userResult = lines[0].substring(output.indexOf(":") + 1).trim();
+                if (!userResult.equalsIgnoreCase(actualResult)) {
+                    return CheckResult.wrong("The conversion result of your program is wrong");
+                }
+
+                if (main.isFinished()) {
+                    return CheckResult.wrong("Your program should not terminate until the user enter " +
+                        "\"/exit\" in the top-level menu");
+                }
+
+                if (lastLine.contains("/exit")) {
+                    return CheckResult.wrong("Your program should remember the user's source and target " +
+                        "base and should not return to the top-level menu " +
+                        "until the user enters \"/back\"");
+                }
+
+                main.execute("/back");
+            }
+
+        }
+
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
+        }
+
+        return CheckResult.correct();
     }
 
-    int getRandomDecimal() {
-        return new Random().nextInt(1000);
+    CheckResult test7() {
+        TestedProgram main = new TestedProgram();
+        String output;
+        String lastLine;
+        String userResult;
+        String actualResult;
+        String randomBigInteger;
+        String[] lines;
+
+        main.start();
+
+        for (int sourceBase = 19; sourceBase <= 36; sourceBase += 3) {
+
+            for (int targetBase = 2; targetBase <= 36; targetBase += 3) {
+
+                if (sourceBase == targetBase) {
+                    continue;
+                }
+
+                output = main.execute(sourceBase + " " + targetBase).toLowerCase();
+                if (!output.contains("base " + sourceBase) || !output.contains("convert to base " + targetBase)) {
+                    return CheckResult.wrong("Your program should prompt the user for the number to be " +
+                        "converted with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base}" +
+                        " (To go back type /back)\" after accepting the " +
+                        "source and target base");
+                }
+
+                if (!output.contains("/back")) {
+                    return CheckResult.wrong("Your program should provide the user with an option to go " +
+                        "back to the top-level menu with the message \"Enter number in base " +
+                        "{user source base} to convert to base {user target base} " +
+                        "(To go back type /back)\"");
+                }
+
+                randomBigInteger = Generator.getRandomBigInteger(sourceBase);
+                actualResult = Converter
+                    .convertSourceToTargetBase(randomBigInteger, sourceBase, targetBase);
+
+                output = main.execute(randomBigInteger).toLowerCase();
+
+                lines = output.split("\n");
+                lastLine = lines[lines.length - 1];
+
+                if (!lines[0].contains(":")) {
+                    return CheckResult.wrong("After entering the target base the next line doesn't contain a conversion result!\n" +
+                        "It should contain ':' symbol!\n" +
+                        "Your line\n:" + lines[0]);
+                }
+
+                userResult = lines[0].substring(output.indexOf(":") + 1).trim();
+                if (!userResult.equalsIgnoreCase(actualResult)) {
+                    return CheckResult.wrong("The conversion result of your program is wrong");
+                }
+
+                if (main.isFinished()) {
+                    return CheckResult.wrong("Your program should not terminate until the user enter " +
+                        "\"/exit\" in the top-level menu");
+                }
+
+                if (lastLine.contains("/exit")) {
+                    return CheckResult.wrong("Your program should remember the user's source and target " +
+                        "base and should not return to the top-level menu " +
+                        "until the user enters \"/back\"");
+                }
+
+                main.execute("/back");
+            }
+
+        }
+
+        main.execute("/exit");
+        if (!main.isFinished()) {
+            return CheckResult.wrong("Your program should terminate when the user enters " +
+                "\"/exit\"");
+        }
+
+        return CheckResult.correct();
     }
 
+}
+
+class Generator {
+    static String getRandomBigInteger(int sourceBase) {
+        BigInteger upperLimit = new BigInteger("500000000000000");
+        BigInteger randomNumber;
+        do {
+            randomNumber = new BigInteger(upperLimit.bitLength(), new Random());
+        } while (randomNumber.compareTo(upperLimit) >= 0);
+
+        return randomNumber.toString(sourceBase);
+    }
+
+    static String getRandomSourceNumber(int sourceBase) {
+
+        int n = new Random().nextInt(1000);
+
+        return Integer.toString(n, sourceBase);
+    }
+}
+
+class Converter {
+    static String convertDecimalToBaseX(String num, int targetBase) {
+        return new BigInteger(String.valueOf(num)).toString(targetBase);
+    }
+
+    static String convertBaseXToDecimal(String number, int sourceBase) {
+        BigInteger integer = new BigInteger(number, sourceBase);
+        return integer.toString();
+    }
+
+    static String convertSourceToTargetBase(String number, int sourceBase, int targetBase) {
+        //Step 1 - convert source number to decimal
+        String decimal = convertBaseXToDecimal(number, sourceBase);
+
+        //Step 2 - convert decimal to target base
+        return convertDecimalToBaseX(decimal, targetBase);
+    }
 }
